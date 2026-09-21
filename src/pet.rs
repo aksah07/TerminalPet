@@ -1,7 +1,13 @@
 // Removed once the CLI and UI actually call everything in this file.
 #![allow(dead_code)]
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
+
+// Time passes in fixed-size steps ("ticks"). Only whole ticks are consumed, so
+// leftover minutes are never lost. MAX_TICKS stops a months-long absence from
+// looping forever; stats hit their limits long before that anyway.
+const TICK_MINUTES: i64 = 30;
+const MAX_TICKS: i64 = 200;
 
 pub const MAX_STAT: u32 = 100;
 pub const XP_PER_LEVEL: u32 = 100;
@@ -73,6 +79,38 @@ impl Pet {
     pub fn pet(&mut self) -> bool {
         self.happiness = adjust(self.happiness, 8);
         self.add_xp(3)
+    }
+
+    /// Catch up on the time that passed since `last_updated`.
+    /// `now` is a parameter (not `Utc::now()` inside) so tests can pick any time.
+    pub fn apply_elapsed(&mut self, now: DateTime<Utc>) {
+        // Clock moved backwards (timezone/NTP glitch): just resync, change nothing.
+        if now < self.last_updated {
+            self.last_updated = now;
+            return;
+        }
+
+        // Integer division throws away the remainder: 50 minutes is 1 tick.
+        let ticks = (now - self.last_updated).num_minutes() / TICK_MINUTES;
+        for _ in 0..ticks.min(MAX_TICKS) {
+            self.tick();
+        }
+        // Advance by whole ticks only, so the leftover minutes count next time.
+        self.last_updated += Duration::minutes(ticks * TICK_MINUTES);
+    }
+
+    /// One 30-minute step of the world.
+    fn tick(&mut self) {
+        self.hunger = adjust(self.hunger, -3);
+        self.energy = adjust(self.energy, 2);
+        self.happiness = adjust(self.happiness, -1);
+
+        if self.hunger == 0 {
+            self.health = adjust(self.health, -5);
+            self.happiness = adjust(self.happiness, -2);
+        } else if self.hunger >= 40 {
+            self.health = adjust(self.health, 1);
+        }
     }
 
     /// Add XP, rolling over into levels. Returns true if at least one level was gained.
@@ -156,6 +194,66 @@ mod tests {
         assert!(leveled);
         assert_eq!(pet.level, 2);
         assert_eq!(pet.xp, 0);
+    }
+
+    #[test]
+    fn three_hours_away() {
+        let mut pet = Pet::new("Unni");
+        let start = pet.last_updated;
+        pet.apply_elapsed(start + Duration::hours(3)); // 6 ticks
+        assert_eq!(pet.hunger, 70 - 18);
+        assert_eq!(pet.energy, 80 + 12);
+        assert_eq!(pet.happiness, 70 - 6);
+        assert_eq!(pet.health, 100);
+        assert_eq!(pet.last_updated, start + Duration::hours(3));
+    }
+
+    #[test]
+    fn less_than_one_tick_changes_nothing_and_keeps_the_time() {
+        let mut pet = Pet::new("Unni");
+        let before = pet.clone();
+        pet.apply_elapsed(before.last_updated + Duration::minutes(29));
+        assert_eq!(pet, before); // last_updated untouched, so the 29 minutes aren't lost
+    }
+
+    #[test]
+    fn leftover_minutes_are_kept() {
+        let mut pet = Pet::new("Unni");
+        let start = pet.last_updated;
+        pet.apply_elapsed(start + Duration::minutes(50)); // 1 tick + 20 spare minutes
+        assert_eq!(pet.hunger, 67);
+        assert_eq!(pet.last_updated, start + Duration::minutes(30));
+    }
+
+    #[test]
+    fn starving_hurts_health() {
+        let mut pet = Pet::new("Unni");
+        pet.hunger = 5;
+        let start = pet.last_updated;
+        pet.apply_elapsed(start + Duration::hours(3));
+        assert_eq!(pet.hunger, 0);
+        assert_eq!(pet.health, 75); // starving for ticks 2..=6, -5 each
+    }
+
+    #[test]
+    fn very_long_absence_stays_in_range() {
+        let mut pet = Pet::new("Unni");
+        let start = pet.last_updated;
+        pet.apply_elapsed(start + Duration::days(365));
+        assert_eq!(pet.hunger, 0);
+        assert_eq!(pet.energy, 100);
+        assert_eq!(pet.health, 0);
+        assert_eq!(pet.last_updated, start + Duration::days(365));
+    }
+
+    #[test]
+    fn clock_going_backwards_is_harmless() {
+        let mut pet = Pet::new("Unni");
+        let before = pet.clone();
+        let earlier = pet.last_updated - Duration::hours(2);
+        pet.apply_elapsed(earlier);
+        assert_eq!(pet.hunger, before.hunger);
+        assert_eq!(pet.last_updated, earlier);
     }
 
     #[test]

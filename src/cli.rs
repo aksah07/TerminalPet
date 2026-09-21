@@ -50,14 +50,14 @@ fn print_status(pet: &Pet) {
 
 fn cmd_status() -> Result<()> {
     let db = Database::open()?;
-    let pet = db.load_or_create()?;
+    let pet = db.load_current()?;
     print_status(&pet);
     Ok(())
 }
 
 fn cmd_feed() -> Result<()> {
     let db = Database::open()?;
-    let mut pet = db.load_or_create()?;
+    let mut pet = db.load_current()?;
     let leveled_up = pet.feed();
     db.save_pet(&pet)?;
     println!("{} munches happily.", pet.name);
@@ -70,7 +70,7 @@ fn cmd_feed() -> Result<()> {
 
 fn cmd_play() -> Result<()> {
     let db = Database::open()?;
-    let mut pet = db.load_or_create()?;
+    let mut pet = db.load_current()?;
     let leveled_up = pet.play();
     db.save_pet(&pet)?;
     println!("{} plays and gets a little tired.", pet.name);

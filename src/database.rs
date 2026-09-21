@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::pet::{Pet, DEFAULT_NAME};
@@ -9,7 +10,7 @@ use crate::pet::{Pet, DEFAULT_NAME};
 // The whole schema: one table with (at most) one row. `id = 1` is enforced by a
 // CHECK constraint, so the database itself refuses a second pet. The other CHECKs
 // mean even a hand-edited database can't hold an out-of-range stat.
-// Timestamps are stored as readable text (RFC 3339, e.g. 2026-09-22T10:00:00+00:00).
+// Timestamps are stored as readable text, e.g. 2026-09-22 10:00:00+00:00.
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS pet (
     id           INTEGER PRIMARY KEY CHECK (id = 1),
@@ -126,6 +127,15 @@ impl Database {
                 Ok(pet)
             }
         }
+    }
+
+    /// What every launch should use: load the pet, apply the time that passed
+    /// while the app was closed, and save the result.
+    pub fn load_current(&self) -> Result<Pet> {
+        let mut pet = self.load_or_create()?;
+        pet.apply_elapsed(Utc::now());
+        self.save_pet(&pet)?;
+        Ok(pet)
     }
 
     pub fn delete_pet(&self) -> Result<()> {
