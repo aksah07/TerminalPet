@@ -1,9 +1,9 @@
-mod cli;
-mod pet;
-mod database;
 mod app;
-mod ui;
+mod cli;
+mod database;
 mod events;
+mod pet;
+mod ui;
 
 use anyhow::Result;
 

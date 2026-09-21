@@ -1,30 +1,42 @@
+// Removed once the CLI and UI actually call everything in this file.
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 
-/// Represents the pet's state.
-/// This struct holds all persistent data about Mochi.
+pub const MAX_STAT: u32 = 100;
+pub const XP_PER_LEVEL: u32 = 100;
+
+/// Add a (possibly negative) amount to a stat and keep it within 0..=100.
+///
+/// Rust concept: `u32` cannot go below 0, so `stat - 30` would panic in debug
+/// builds when stat is 10. We convert to `i32` (a signed number), do the math,
+/// `clamp` it into range, then convert back. `as` is Rust's explicit cast.
+fn adjust(stat: u32, delta: i32) -> u32 {
+    (stat as i32 + delta).clamp(0, MAX_STAT as i32) as u32
+}
+
+/// All persistent data about the pet. Every stat is 0..=100 and higher is better
+/// (so `hunger` really means "fullness": 100 = well fed, 0 = starving).
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct Pet {
     pub name: String,
-    pub happiness: u32,    // 0-100
-    pub hunger: u32,       // 0-100 (0 = full, 100 = starving)
-    pub energy: u32,       // 0-100
-    pub health: u32,       // 0-100
+    pub happiness: u32,
+    pub hunger: u32,
+    pub energy: u32,
+    pub health: u32,
     pub level: u32,
     pub xp: u32,
     pub created_at: DateTime<Utc>,
     pub last_updated: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
 impl Pet {
-    /// Create a new pet with default stats.
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
         let now = Utc::now();
         Pet {
-            name,
-            happiness: 50,
-            hunger: 50,
+            name: name.to_string(),
+            happiness: 70,
+            hunger: 70,
             energy: 80,
             health: 100,
             level: 1,
@@ -34,56 +46,44 @@ impl Pet {
         }
     }
 
-    // Action: Feed the pet
-    pub fn feed(&mut self) {
-        self.hunger = self.hunger.saturating_sub(30);
-        self.happiness = (self.happiness + 5).min(100);
-        self.last_updated = Utc::now();
+    // Actions take `&mut self`: a mutable borrow, meaning "I may change this pet".
+    // They return `true` if the pet levelled up, so the UI can announce it later.
+    // They deliberately do NOT touch `last_updated`; Phase 4 owns time.
+
+    pub fn feed(&mut self) -> bool {
+        self.hunger = adjust(self.hunger, 30);
+        self.happiness = adjust(self.happiness, 5);
+        self.add_xp(5)
     }
 
-    // Action: Play with the pet
-    pub fn play(&mut self) {
-        self.happiness = (self.happiness + 20).min(100);
-        self.energy = self.energy.saturating_sub(15);
-        self.hunger = (self.hunger + 5).min(100);
-        self.xp = self.xp + 10;
-        self.last_updated = Utc::now();
+    pub fn play(&mut self) -> bool {
+        self.happiness = adjust(self.happiness, 15);
+        self.energy = adjust(self.energy, -15);
+        self.hunger = adjust(self.hunger, -8);
+        self.add_xp(15)
     }
 
-    // Action: Let the pet sleep
-    pub fn sleep(&mut self) {
-        self.energy = (self.energy + 40).min(100);
-        self.hunger = (self.hunger + 10).min(100);
-        self.last_updated = Utc::now();
+    pub fn sleep(&mut self) -> bool {
+        self.energy = adjust(self.energy, 40);
+        self.hunger = adjust(self.hunger, -10);
+        self.add_xp(5)
     }
 
-    // Action: Pet/interact with the pet
-    pub fn pet(&mut self) {
-        self.happiness = (self.happiness + 10).min(100);
-        self.last_updated = Utc::now();
+    pub fn pet(&mut self) -> bool {
+        self.happiness = adjust(self.happiness, 8);
+        self.add_xp(3)
     }
 
-    // Clamp all stats to valid ranges (0-100)
-    pub fn clamp_stats(&mut self) {
-        self.happiness = self.happiness.min(100);
-        self.hunger = self.hunger.min(100);
-        self.energy = self.energy.min(100);
-        self.health = self.health.min(100);
-    }
-
-    // Get a status message based on pet's current state
-    pub fn get_status_message(&self) -> String {
-        if self.happiness > 70 {
-            "I'm feeling great!".to_string()
-        } else if self.happiness < 30 {
-            "I'm sad...".to_string()
-        } else if self.hunger > 80 {
-            "I'm so hungry!".to_string()
-        } else if self.energy < 20 {
-            "I need sleep...".to_string()
-        } else {
-            "I'm doing okay.".to_string()
+    /// Add XP, rolling over into levels. Returns true if at least one level was gained.
+    fn add_xp(&mut self, amount: u32) -> bool {
+        self.xp += amount;
+        let mut leveled_up = false;
+        while self.xp >= XP_PER_LEVEL {
+            self.xp -= XP_PER_LEVEL;
+            self.level += 1;
+            leveled_up = true;
         }
+        leveled_up
     }
 }
 
@@ -92,29 +92,75 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_feed() {
-        let mut pet = Pet::new("Mochi".to_string());
-        pet.hunger = 100;
+    fn feed_raises_hunger_and_happiness() {
+        let mut pet = Pet::new("Unni");
+        pet.hunger = 40;
+        pet.happiness = 50;
         pet.feed();
         assert_eq!(pet.hunger, 70);
-        assert!(pet.happiness > 50);
+        assert_eq!(pet.happiness, 55);
     }
 
     #[test]
-    fn test_play() {
-        let mut pet = Pet::new("Mochi".to_string());
-        let initial_energy = pet.energy;
+    fn play_trades_energy_and_food_for_happiness() {
+        let mut pet = Pet::new("Unni");
+        let before = pet.clone();
         pet.play();
-        assert!(pet.happiness > 50);
-        assert!(pet.energy < initial_energy);
-        assert!(pet.xp > 0);
+        assert!(pet.happiness > before.happiness);
+        assert!(pet.energy < before.energy);
+        assert!(pet.hunger < before.hunger);
     }
 
     #[test]
-    fn test_stats_clamped() {
-        let mut pet = Pet::new("Mochi".to_string());
-        pet.happiness = 1000;
-        pet.clamp_stats();
+    fn sleep_restores_energy() {
+        let mut pet = Pet::new("Unni");
+        pet.energy = 10;
+        pet.sleep();
+        assert_eq!(pet.energy, 50);
+    }
+
+    #[test]
+    fn petting_raises_happiness() {
+        let mut pet = Pet::new("Unni");
+        pet.happiness = 50;
+        pet.pet();
+        assert_eq!(pet.happiness, 58);
+    }
+
+    #[test]
+    fn stats_never_exceed_100() {
+        let mut pet = Pet::new("Unni");
+        pet.hunger = 95;
+        pet.happiness = 99;
+        pet.feed();
+        assert_eq!(pet.hunger, 100);
         assert_eq!(pet.happiness, 100);
+    }
+
+    #[test]
+    fn stats_never_go_below_0() {
+        let mut pet = Pet::new("Unni");
+        pet.energy = 5;
+        pet.hunger = 3;
+        pet.play();
+        assert_eq!(pet.energy, 0);
+        assert_eq!(pet.hunger, 0);
+    }
+
+    #[test]
+    fn xp_rolls_over_into_levels() {
+        let mut pet = Pet::new("Unni");
+        pet.xp = 95;
+        let leveled = pet.feed(); // +5 xp -> exactly 100
+        assert!(leveled);
+        assert_eq!(pet.level, 2);
+        assert_eq!(pet.xp, 0);
+    }
+
+    #[test]
+    fn no_level_up_reports_false() {
+        let mut pet = Pet::new("Unni");
+        assert!(!pet.pet());
+        assert_eq!(pet.level, 1);
     }
 }

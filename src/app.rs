@@ -11,10 +11,7 @@ pub struct App {
 impl App {
     #[allow(dead_code)]
     pub fn new(pet: Pet) -> Self {
-        App {
-            pet,
-            running: true,
-        }
+        App { pet, running: true }
     }
 
     #[allow(dead_code)]

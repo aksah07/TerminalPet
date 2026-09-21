@@ -1,12 +1,12 @@
-use anyhow::Result;
 use crate::pet::Pet;
+use anyhow::Result;
 
 /// Initialize the database and return a Pet.
 /// Phase 3: This will create SQLite tables and load/save pet data.
 #[allow(dead_code)]
 pub fn init() -> Result<Pet> {
     // For now, just create a new pet
-    Ok(Pet::new("Mochi".to_string()))
+    Ok(Pet::new("Unni"))
 }
 
 /// Save pet to database.
