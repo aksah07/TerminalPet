@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 
 pub const MAX_STAT: u32 = 100;
 pub const XP_PER_LEVEL: u32 = 100;
+pub const DEFAULT_NAME: &str = "Unni";
 
 /// Add a (possibly negative) amount to a stat and keep it within 0..=100.
 ///
@@ -17,7 +18,7 @@ fn adjust(stat: u32, delta: i32) -> u32 {
 
 /// All persistent data about the pet. Every stat is 0..=100 and higher is better
 /// (so `hunger` really means "fullness": 100 = well fed, 0 = starving).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Pet {
     pub name: String,
     pub happiness: u32,
