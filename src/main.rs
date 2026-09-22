@@ -2,6 +2,7 @@ mod app;
 mod cli;
 mod database;
 mod events;
+mod personality;
 mod pet;
 mod ui;
 

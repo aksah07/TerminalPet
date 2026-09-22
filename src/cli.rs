@@ -4,6 +4,7 @@ use anyhow::{bail, Result};
 
 use crate::app;
 use crate::database::Database;
+use crate::personality;
 use crate::pet::{Pet, DEFAULT_NAME, XP_PER_LEVEL};
 
 pub fn handle_cli(args: &[String]) -> Result<()> {
@@ -47,6 +48,7 @@ fn print_status(pet: &Pet) {
     println!("  Hunger    {:>3}", pet.hunger);
     println!("  Energy    {:>3}", pet.energy);
     println!("  Health    {:>3}", pet.health);
+    println!("  \"{}\"", personality::message(pet));
 }
 
 fn cmd_status() -> Result<()> {

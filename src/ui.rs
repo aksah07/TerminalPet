@@ -53,7 +53,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     let message_text = match &app.last_message {
         Some(msg) => msg.clone(),
-        None => format!("\"{}\"", status_message(pet)),
+        None => format!("\"{}\"", crate::personality::message(pet)),
     };
     let message = Paragraph::new(message_text)
         .style(Style::default().add_modifier(Modifier::ITALIC))
@@ -133,18 +133,4 @@ fn info_panel(pet: &Pet) -> Paragraph<'static> {
     Paragraph::new(text)
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
-}
-
-/// Placeholder only: Phase 7 replaces this with a randomized personality
-/// system. Kept here, not in `pet.rs`, because it's display logic, not state.
-fn status_message(pet: &Pet) -> &'static str {
-    if pet.hunger < 20 {
-        "I could really use some food..."
-    } else if pet.energy < 20 {
-        "...sleep..."
-    } else if pet.happiness > 70 {
-        "I'm feeling great!"
-    } else {
-        "I'm doing okay."
-    }
 }
