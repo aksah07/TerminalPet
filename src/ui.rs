@@ -16,7 +16,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     let pet = &app.pet;
     let area = f.area();
 
-    let outer = Block::bordered().title(format!(" {} ", pet.name.to_uppercase()));
+    let outer = Block::bordered().title(format!(" \u{1F408} {} ", pet.name.to_uppercase()));
     let inner = outer.inner(area);
     f.render_widget(outer, area);
 
@@ -64,13 +64,17 @@ pub fn draw(f: &mut Frame, app: &App) {
         f.render_widget(info_panel(pet), rows[10]);
     }
 
-    f.render_widget(Paragraph::new("-".repeat(inner.width as usize)), rows[11]);
+    f.render_widget(Paragraph::new("─".repeat(inner.width as usize)), rows[11]);
     f.render_widget(
         Paragraph::new("[F] Feed  [P] Play  [S] Sleep  [A] Pet  [I] Info  [Q] Quit")
             .alignment(Alignment::Center),
         rows[12],
     );
 }
+
+// A stat at or below this needs attention, so its bar turns red no matter
+// what color it normally is.
+const WARNING_THRESHOLD: u32 = 20;
 
 /// One "label [bar] value" row. Splitting the row into three columns ourselves
 /// is simpler than fighting Gauge's built-in centered label for this layout.
@@ -84,10 +88,16 @@ fn stat_bar(f: &mut Frame, area: Rect, label: &str, value: u32, color: Color) {
         ])
         .split(area);
 
+    let bar_color = if value <= WARNING_THRESHOLD {
+        Color::Red
+    } else {
+        color
+    };
+
     f.render_widget(Paragraph::new(label), cols[0]);
     f.render_widget(
         Gauge::default()
-            .gauge_style(Style::default().fg(color))
+            .gauge_style(Style::default().fg(bar_color))
             .ratio(value as f64 / 100.0)
             .label(""),
         cols[1],
