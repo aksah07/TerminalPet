@@ -2,6 +2,7 @@ use std::io::{self, Write};
 
 use anyhow::{bail, Result};
 
+use crate::app;
 use crate::database::Database;
 use crate::pet::{Pet, DEFAULT_NAME, XP_PER_LEVEL};
 
@@ -9,9 +10,9 @@ pub fn handle_cli(args: &[String]) -> Result<()> {
     // args[0] is the program name; args.get(1) is Some(command) or None.
     match args.get(1).map(String::as_str) {
         None => {
-            println!("Starting {DEFAULT_NAME}'s terminal...");
-            println!("(Interactive UI coming in Phase 5!)");
-            Ok(())
+            let db = Database::open()?;
+            let pet = db.load_current()?;
+            app::run(&db, pet)
         }
         Some("help") => {
             show_help();
