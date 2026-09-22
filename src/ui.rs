@@ -1,3 +1,4 @@
+use chrono::Utc;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Gauge, Paragraph};
@@ -50,10 +51,18 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     level_bar(f, rows[7], pet);
 
-    let message = Paragraph::new(format!("\"{}\"", status_message(pet)))
+    let message_text = match &app.last_message {
+        Some(msg) => msg.clone(),
+        None => format!("\"{}\"", status_message(pet)),
+    };
+    let message = Paragraph::new(message_text)
         .style(Style::default().add_modifier(Modifier::ITALIC))
         .alignment(Alignment::Center);
     f.render_widget(message, rows[9]);
+
+    if app.show_info {
+        f.render_widget(info_panel(pet), rows[10]);
+    }
 
     f.render_widget(Paragraph::new("-".repeat(inner.width as usize)), rows[11]);
     f.render_widget(
@@ -108,6 +117,22 @@ fn level_bar(f: &mut Frame, area: Rect, pet: &Pet) {
         Paragraph::new(format!("{}/{}", pet.xp, XP_PER_LEVEL)),
         cols[2],
     );
+}
+
+/// The `[I]` panel: details that don't fit the always-on stat bars.
+fn info_panel(pet: &Pet) -> Paragraph<'static> {
+    let age = Utc::now() - pet.created_at;
+    let text = format!(
+        "Born {}  |  Alive for {} day(s), {} hour(s)  |  XP {}/{}",
+        pet.created_at.format("%Y-%m-%d %H:%M"),
+        age.num_days(),
+        age.num_hours() % 24,
+        pet.xp,
+        XP_PER_LEVEL,
+    );
+    Paragraph::new(text)
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center)
 }
 
 /// Placeholder only: Phase 7 replaces this with a randomized personality

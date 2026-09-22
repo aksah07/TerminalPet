@@ -19,16 +19,46 @@ use crate::ui;
 pub struct App {
     pub pet: Pet,
     pub running: bool,
+    /// Feedback from the most recent action (e.g. "Unni munches happily!").
+    /// Replaced by the next action; there's no timer, so it stays until then.
+    pub last_message: Option<String>,
+    pub show_info: bool,
 }
 
 impl App {
     pub fn new(pet: Pet) -> Self {
-        App { pet, running: true }
+        App {
+            pet,
+            running: true,
+            last_message: None,
+            show_info: false,
+        }
     }
 
     pub fn quit(&mut self) {
         self.running = false;
     }
+}
+
+/// Runs one pet action, records a message for the UI, and saves the result.
+///
+/// `action` is a function pointer — `Pet::feed` has type `fn(&mut Pet) -> bool`,
+/// the same signature `feed`, `play`, `sleep` and `pet` all share, so one
+/// helper can drive any of them instead of repeating this block four times.
+fn apply_action(
+    app: &mut App,
+    db: &Database,
+    action: fn(&mut Pet) -> bool,
+    template: &str,
+) -> Result<()> {
+    let leveled_up = action(&mut app.pet);
+    let mut message = template.replace("{name}", &app.pet.name);
+    if leveled_up {
+        message.push_str(&format!(" Level up! Now level {}.", app.pet.level));
+    }
+    app.last_message = Some(message);
+    db.save_pet(&app.pet)?;
+    Ok(())
 }
 
 // A type alias: writing `Term` instead of this full generic type everywhere.
@@ -42,7 +72,7 @@ pub fn run(db: &Database, pet: Pet) -> Result<()> {
     let mut terminal = setup_terminal()?;
     let mut app = App::new(pet);
 
-    let result = event_loop(&mut terminal, &mut app);
+    let result = event_loop(&mut terminal, &mut app, db);
 
     // Restore the terminal before propagating any error from the loop, so a
     // failure never leaves the user's shell in raw/alternate-screen mode.
@@ -51,7 +81,7 @@ pub fn run(db: &Database, pet: Pet) -> Result<()> {
     result
 }
 
-fn event_loop(terminal: &mut Term, app: &mut App) -> Result<()> {
+fn event_loop(terminal: &mut Term, app: &mut App, db: &Database) -> Result<()> {
     while app.running {
         terminal.draw(|f| ui::draw(f, app))?;
 
@@ -61,7 +91,19 @@ fn event_loop(terminal: &mut Term, app: &mut App) -> Result<()> {
             match code {
                 KeyCode::Char('q' | 'Q') | KeyCode::Esc => app.quit(),
                 _ if ctrl_c => app.quit(),
-                // Phase 6 adds F / P / S / A / I here, calling app.pet's actions.
+                KeyCode::Char('f' | 'F') => {
+                    apply_action(app, db, Pet::feed, "{name} munches happily!")?
+                }
+                KeyCode::Char('p' | 'P') => {
+                    apply_action(app, db, Pet::play, "{name} had fun playing!")?
+                }
+                KeyCode::Char('s' | 'S') => {
+                    apply_action(app, db, Pet::sleep, "{name} wakes up feeling rested.")?
+                }
+                KeyCode::Char('a' | 'A') => {
+                    apply_action(app, db, Pet::pet, "{name} purrs contentedly.")?
+                }
+                KeyCode::Char('i' | 'I') => app.show_info = !app.show_info,
                 _ => {}
             }
         }
